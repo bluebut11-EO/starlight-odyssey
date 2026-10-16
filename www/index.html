@@ -180,6 +180,19 @@ input[type=range]{width:160px; accent-color:var(--cyan)}
 #nodeInfo{position:absolute; left:10px; right:10px; bottom:80px; z-index:7}
 #nodeInfo .card{padding:16px}
 .nodeType{font-family:Orbitron, sans-serif; font-size:20px}
+
+
+
+
+/* ---------- title art & motion (Higgsfield) ---------- */
+#titleMedia{position:absolute; inset:0; z-index:-1; pointer-events:none!important; overflow:hidden; opacity:0; transition:opacity .7s; background:#000}
+#titleMedia.ready{opacity:1}
+#titleMedia img, #titleMedia video{position:absolute; inset:0; width:100%; height:100%; object-fit:cover; display:block}
+#titleMedia .blur{filter:blur(28px) brightness(.7); transform:scale(1.15); display:none}
+#titleMedia video{opacity:0; transition:opacity .9s}
+#titleMedia.moving video{opacity:1}
+#titleMedia .shade{position:absolute; inset:0; background:linear-gradient(180deg, rgba(4,8,26,.62) 0%, rgba(4,8,26,0) 34%, rgba(4,8,26,0) 56%, rgba(4,8,26,.82) 100%)}
+@media (min-aspect-ratio: 4/5){ #titleMedia .blur{display:block} #titleMedia .main, #titleMedia video{object-fit:contain} }
 </style>
 </head>
 <body>
@@ -209,6 +222,10 @@ input[type=range]{width:160px; accent-color:var(--cyan)}
   </div>
 
   <div id="title" hidden>
+    <div id="titleMedia" aria-hidden="true" data-img='["media/title.png", "https://d8j0ntlcm91z4.cloudfront.net/user_3KkGGOriAdCX1K3K6BvMto6W8aM/hf_20261016_192145_3df6b395-0015-41d2-86df-13ad9b80aca1.png"]' data-vid='["media/title.mp4", "https://d8j0ntlcm91z4.cloudfront.net/user_3KkGGOriAdCX1K3K6BvMto6W8aM/hf_20261016_193333_77d88e18-a0f8-40c8-865f-2b5f5efcf9f9.mp4"]'><img class="blur" alt=""><img class="main" alt=""><video muted loop playsinline preload="auto"></video><div class="shade"></div></div>
+    
+    
+    
     <div class="logo"><div class="a">STARLIGHT</div><div class="b">ODYSSEY</div><div class="c">HAJUN'S QUEST</div></div>
     <div class="tBtns">
       <div class="tInfo" id="tInfo"></div>
@@ -239,6 +256,74 @@ input[type=range]{width:160px; accent-color:var(--cyan)}
 
 <script>
 (() => {
+/* Title art & motion: local media/ copy first, online copy second, drawn title if both fail. */
+(function titleMedia(){
+  const HOOKS = { ok: () => AudioSys.sfxVol > .02, duck: () => {}, voice: () => Clips.play('title', { force: true }) };
+  const box = document.getElementById('titleMedia'); if (!box) return;
+  const host = box.parentElement, imgs = box.querySelectorAll('img'), main = box.querySelector('.main'), blur = box.querySelector('.blur'), vid = box.querySelector('video');
+  const IMG = JSON.parse(box.dataset.img || '[]'), VID = JSON.parse(box.dataset.vid || '[]');
+  let i = 0;
+  main.onload = () => { blur.src = main.currentSrc || main.src; box.classList.add('ready'); };
+  main.onerror = () => { if (++i < IMG.length) main.src = IMG[i]; };
+  if (IMG.length) main.src = IMG[0];
+  const calm = (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) || (navigator.connection && navigator.connection.saveData);
+  if (!VID.length || calm) vid.remove();
+  vid.muted = true; vid.defaultMuted = true; vid.playsInline = true; vid.loop = true; vid.setAttribute('muted', '');
+  let v = 0;
+  const hasVid = () => vid.isConnected;
+  const shown = () => !host.hidden && !host.closest('[hidden]');
+  const play = () => { if (shown() && vid.isConnected) { const p = vid.play(); if (p && p.catch) p.catch(() => {}); } };
+  const load = () => { vid.src = VID[v]; vid.load(); };
+  if (hasVid()) vid.addEventListener('error', () => { if (++v < VID.length) load(); else vid.remove(); });
+  if (hasVid()) vid.addEventListener('playing', () => { box.classList.add('moving', 'ready'); });
+  if (hasVid()) vid.addEventListener('canplay', play);
+  new MutationObserver(() => { if (shown()) play(); else vid.pause(); }).observe(host, { attributes: true, attributeFilter: ['hidden'] });
+  document.addEventListener('pointerdown', play, { capture: true, passive: true });
+  document.addEventListener('visibilitychange', () => { if (document.hidden) vid.pause(); else play(); });
+  // Play the clip's spoken line once, after the first tap on the title screen (only when game sound is on).
+  let voiced = false;
+  const voice = () => {
+    if (voiced || !shown()) return;
+    let ok = true; try { ok = HOOKS.ok(); } catch (e) {}
+    if (!ok) return;
+    if (HOOKS.voice){ voiced = true; try { HOOKS.voice(); } catch (e) {} return; }
+    if (!vid.isConnected || vid.readyState < 2) return;
+    voiced = true; vid.currentTime = 0; vid.muted = false; vid.volume = 1; play();
+    try { HOOKS.duck(true); } catch (e) {}
+    let last = 0;
+    const done = () => { vid.muted = true; vid.removeEventListener('timeupdate', tick); vid.removeEventListener('pause', done); try { HOOKS.duck(false); } catch (e) {} };
+    const tick = () => { if (vid.currentTime + .3 < last) done(); last = vid.currentTime; };
+    vid.addEventListener('timeupdate', tick); vid.addEventListener('pause', done);
+  };
+  document.addEventListener('click', () => setTimeout(voice, 60));
+  if (hasVid()) load();
+})();
+
+/* Character voice lines made with Higgsfield (ElevenLabs v4 voices). */
+const Clips = (() => {
+  const LIB = {"title": [{"l": "media/voice/title1.mp3", "r": "https://d8j0ntlcm91z4.cloudfront.net/user_3KkGGOriAdCX1K3K6BvMto6W8aM/hf_20261016_194136_8ebd71ae-fa24-4a65-8059-6e191ff513c1.mp3"}], "ok": [{"l": "media/voice/ok1.mp3", "r": "https://d8j0ntlcm91z4.cloudfront.net/user_3KkGGOriAdCX1K3K6BvMto6W8aM/hf_20261016_194142_6d1d8064-3852-41d5-ac08-d0efd3253a58.mp3"}, {"l": "media/voice/ok2.mp3", "r": "https://d8j0ntlcm91z4.cloudfront.net/user_3KkGGOriAdCX1K3K6BvMto6W8aM/hf_20261016_194124_6c50fc53-3e0b-4f0a-8ff1-35b863e6d04a.mp3"}], "no": [{"l": "media/voice/no1.mp3", "r": "https://d8j0ntlcm91z4.cloudfront.net/user_3KkGGOriAdCX1K3K6BvMto6W8aM/hf_20261016_194142_800d1b22-eeaa-4c33-b2d5-95840944e7b0.mp3"}], "win": [{"l": "media/voice/win1.mp3", "r": "https://d8j0ntlcm91z4.cloudfront.net/user_3KkGGOriAdCX1K3K6BvMto6W8aM/hf_20261016_194127_7985b62c-109c-48f7-ab5e-000c1ca2d3b5.mp3"}]};
+  const cache = {}; let cur = null, last = 0, okFn = () => true;
+  const make = c => { const a = new Audio(); a.preload = 'auto'; let tried = 0; a.addEventListener('error', () => { if (tried++ === 0){ a.src = c.r; if (a._want) a.play().catch(() => {}); } }); a.src = c.l; return a; };
+  return {
+    setOk(f){ okFn = f; },
+    has(key){ return !!LIB[key]; },
+    play(key, opt = {}){
+      try {
+        if (!LIB[key] || !okFn()) return false;
+        const now = Date.now(); if (!opt.force && now - last < 700) return false; last = now;
+        const list = LIB[key], i = Math.floor(Math.random() * list.length), c = list[i], id = key + i;
+        const a = cache[id] || (cache[id] = make(c));
+        if (cur && cur !== a){ cur.pause(); }
+        cur = a; a._want = true; try { a.currentTime = 0; } catch (e) {}
+        a.volume = opt.vol == null ? 1 : opt.vol;
+        const p = a.play(); if (p && p.catch) p.catch(() => {});
+        return true;
+      } catch (e) { return false; }
+    },
+    warm(keys){ try { (keys || Object.keys(LIB)).forEach(k => LIB[k].forEach((c, i) => { const id = k + i; if (!cache[id]) cache[id] = make(c); })); } catch (e) {} },
+  };
+})();
+
 'use strict';
 /* =========================================================
    Starlight Odyssey — core utilities + audio (music sequencer & SFX)
@@ -2816,6 +2901,7 @@ function answer(choice, btn){
   fb.innerHTML = `<b>${esc(head)}</b>${ok ? '' : `<div style="margin-top:4px">Answer: <b style="color:#5CE1A0">${esc(S.Q.answer)}</b></div>`}<div style="margin-top:6px">${esc(S.Q.e)}</div><div class="rw">+${S.xp} XP · +${S.scrap} scrap${tags.length ? ' · ' + tags.join(' · ') : ''}</div>`;
   show('qFeed', true); show('qHint', false); show('qTimer', false); show('qTimerLbl', false); show('qNext', true);
   AudioSys.sfx(ok ? 'correct' : 'wrong');
+  Clips.play(ok ? 'ok' : 'no');
   if (ok && r.streak >= 3 && r.streak % 1 === 0) setTimeout(() => AudioSys.sfx('streak'), 300);
   S.result = { ok, r, hinted: S.hinted, quick };
   if (TIME.fast) setTimeout(closeQuestion, 0);
@@ -2964,6 +3050,7 @@ async function endBattle(n, r){
   if (SESSION) SESSION.missions++;
   saveGame();
   AudioSys.play(r.win ? 'victory' : 'defeat', () => AudioSys.play('map'));
+  if (r.win) Clips.play('win', { force: true });
   await showResults(r, { scrap, xp: gx.x, ups: gx.ups, lv0, rested, boss: n.type === 'boss' });
   Battle.stop(); MISSION = null;
   if (r.win && n.type === 'boss') await completeSector();
@@ -3397,6 +3484,8 @@ const _dmg = Battle.damagePlayer.bind(Battle); Battle.damagePlayer = function(a)
 fit();
 goTitle();
 requestAnimationFrame(frame);
+
+Clips.setOk(() => AudioSys.sfxVol > .02);
 
 })();
 </script>
